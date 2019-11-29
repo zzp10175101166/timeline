@@ -1,0 +1,201 @@
+<!DOCTYPE HTML>
+<html lang="zh" xmlns:v-bind="http://www.w3.org/1999/xhtml" xmlns:v-on="http://www.w3.org/1999/xhtml">
+<head>
+    <title>Timeline</title>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+    <link rel="stylesheet" href="css/main.css"/>
+</head>
+<body class="is-preload">
+
+<!-- Wrapper -->
+<div id="wrapper">
+
+    <!-- Header -->
+    <header id="header">
+        <h1><a href="#">Timeline</a></h1>
+        <nav class="main">
+            <button class="button" style="width: 90px;" v-on:click="update">{{new_messages.length}}更新</button>
+            <button class="button" style="width: 90px;" onclick="send()">发消息</button>
+            <button class="button" style="width: 90px;" v-on:click="logout">退出登录</button>
+        </nav>
+    </header>
+
+
+    <!-- Main -->
+    <div id="main">
+        <article class="post" v-for="message in show_new_messages.slice().reverse()" v-bind:key="message.id">
+            <header>
+                <div class="title">
+                    <h2>{{message.title}}</h2>
+                </div>
+                <div class="meta">
+                    <div style="font-size: 20px">{{getPassedTime(message.time)}}</div>
+
+                    <div style="font-size: 20px;margin-bottom: 20px">发布者：{{message.senderName}}</div>
+                </div>
+            </header>
+            <!--            <p>{{message.content}}</p>-->
+            <div v-html="message.content">
+
+            </div>
+        </article>
+
+        <!-- Post -->
+        <article class="post" v-for="message in messages.slice()" v-bind:key="message.id">
+            <header>
+                <div class="title">
+                    <h2>{{message.title}}</h2>
+                </div>
+                <div class="meta">
+                    <div style="font-size: 20px">{{getPassedTime(message.time)}}</div>
+
+                    <div style="font-size: 20px;margin-bottom: 20px">发布者：{{message.senderName}}</div>
+                </div>
+            </header>
+            <!--            <p>{{message.content}}</p>-->
+            <div v-html="message.content">
+
+            </div>
+            <!--            <footer>-->
+            <!--                <ul class="actions">-->
+            <!--                    <li><a href="#" class="button large">Continue Reading</a></li>-->
+            <!--                </ul>-->
+            <!--            </footer>-->
+        </article>
+        <div style="text-align: center"><input id="more" type="button" style="width: 70%;height: 100px" value="更多..." v-on:click="more"></div>
+
+    </div>
+
+</div>
+
+<!-- Scripts -->
+<script src="js/jquery-2.1.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script src="js/jquery.cookie.js"></script>
+<script src="https://unpkg.com/dayjs"></script>
+<script src="js/sockjs.min.js"></script>
+<script src="js/stomp.min.js"></script>
+<!--<script src="https://momentjs.com/downloads/moment.js"></script>-->
+<script src="js/url.js"></script>
+</body>
+<script>
+    function send() {
+        window.open("send.html");
+    }
+</script>
+<script>
+    var timeline = new Vue({
+        el: "#wrapper",
+        data: function () {
+            return {
+                messages: [],
+                new_messages: [],
+                show_new_messages: [],
+                instance: '',
+                times: ''
+            }
+        },
+        created: function () {
+            axios.defaults.withCredentials = true;
+            this.times = 0;
+            this.instance = axios.create({
+                baseURL: baseUrl,
+                timeout: 5000
+            });
+            this.instance.get("/user/messages/" + this.times).then(res => {
+                var obj = res.data;
+                if (obj.status === "success") {
+                    if (obj.data !== null) {
+                        this.messages = obj.data;
+                        this.times++;
+                    }else {
+                        alert("没有更多消息了");
+                    }
+                } else {
+                    alert(obj.data.errMsg);
+                }
+            });
+            var stompClient;
+            var userId = $.cookie('userId');
+            if (userId == null) {
+                window.location.href = "login.html";
+            }
+            var socket = new SockJS(baseUrl + "/stomp");
+// 获取 STOMP 子协议的客户端对象
+            stompClient = Stomp.over(socket);
+// 向服务器发起websocket连接并发送CONNECT帧
+            stompClient.connect(
+                {
+                    userId: userId,
+                    password: 'admin'
+                },
+                function connectCallback(frame) {
+                    // 订阅 一对多
+                    stompClient.subscribe('/topic/getResponse', function (response) {
+                        var obj = JSON.parse(response.body);
+                        if (!(obj.data == null)) {
+                            timeline.new_messages.push(obj.data);
+                            // alert(obj.data.content)
+                        }
+                    });
+                },
+                function errorCallBack(error) {
+// 连接失败时（服务器响应 ERROR 帧）的回调方法
+                    alert("连接失败");
+                }
+            );
+
+        },
+        methods: {
+            getPassedTime: function (time) {
+                //console.log(time)
+                var time1 = dayjs(time);
+                var da = dayjs();
+                if (da.diff(time1, 'days') !== 0) {
+                    return da.diff(time1, 'days') + "天前";
+                }
+                if (da.diff(time1, 'hours') !== 0) {
+                    return da.diff(time1, 'hours') + "小时前";
+                }
+                if (da.diff(time1, 'minutes') !== 0) {
+                    return da.diff(time1, 'minutes') + "分钟前";
+                }
+                return "刚刚";
+
+            },
+            update: function () {
+                for (var i = 0; i < this.new_messages.length; i++) {
+                    this.show_new_messages.push(this.new_messages[i]);
+                }
+                this.new_messages = [];
+            },
+            logout: function () {
+                $.removeCookie('userId');
+                this.instance.post('/user/logout');
+                window.location.href = "login.html";
+            },
+            more: function () {
+                this.instance.get("/user/messages/" + this.times).then(res => {
+                    var obj = res.data;
+                    if (obj.status === "success") {
+                        console.log(obj.data);
+                        if (obj.data.length !== 0) {
+                            for (var i = 0; i < obj.data.length; i++) {
+                                this.messages.push(obj.data[i]);
+                            }
+                            this.times++;
+                        }else {
+                            $("#more").attr("disabled", true);
+                            alert("没有更多消息了");
+                        }
+                    } else {
+                        alert(obj.data.errMsg);
+                    }
+                });
+            }
+        }
+    })
+</script>
+</html>

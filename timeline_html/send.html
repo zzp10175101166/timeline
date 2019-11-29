@@ -1,0 +1,120 @@
+﻿<!doctype html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>发送你的消息</title>
+    <link href="https://cdn.bootcss.com/bootstrap/3.2.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="http://cdn.bootcss.com/font-awesome/4.4.0/css/font-awesome.min.css" rel="stylesheet">
+    <link href="css/editor.css" type="text/css" rel="stylesheet"/>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row" style="text-align: center">
+        <h2>消息发布</h2>
+    </div>
+    <div class="row">
+        <div class="container">
+            <div class="row align-items-end">
+                <label for="title" class="col-lg-1 col-md-2 col-sm-2 col-xs-3"><h3>标题:</h3></label>
+                <input class="col-lg-10 col-md-9 col-sm-9 col-xs-8" style="margin-top: 10px;outline-style: none ;border: 1px solid #ccc;border-radius: 3px;
+                    padding: 14px 14px;font-size: 16px;" type="text"
+                       id="title" placeholder="请输入标题">
+            </div>
+            <div class="row">
+                <label class="col-lg-1 col-md-2 col-sm-2 col-xs-3" for="txtEditor"><h3>内容:</h3></label>
+                <div class="col-lg-10 col-md-9 col-sm-9 col-xs-8 nopadding">
+                    <textarea id="txtEditor"></textarea>
+                </div>
+            </div>
+            <div class="row" style="margin-top: 10px">
+                <input type="button" class="btn btn-default col-lg-1 col-lg-offset-8 col-xs-2 col-xs-offset-3"
+                       value="取消" onclick="close1()">
+                <input type="button" onclick="send()"
+                       class="btn btn-success col-lg-1 col-lg-offset-1 col-xs-2 col-xs-offset-4" value="发送">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="js/jquery-2.1.1.min.js"></script>
+<script src="https://cdn.bootcss.com/bootstrap/3.2.0/js/bootstrap.min.js"></script>
+<script src="js/editor.js"></script>
+<script src="js/sockjs.min.js"></script>
+<script src="js/stomp.min.js"></script>
+<script src="js/jquery.cookie.js"></script>
+<script src="js/url.js"></script>
+<script type="text/javascript">
+    $(document).ready(function () {
+        $("#txtEditor").Editor();
+    });
+</script>
+<!--<script>-->
+<!--    function send() {-->
+<!--        console.log($("#title").val());//标题-->
+<!--        console.log($(".Editor-editor").text());//纯文本-->
+<!--        console.log($(".Editor-editor").html());//有格式html标签-->
+<!--    }-->
+<!--</script>-->
+<script>
+    var userId = $.cookie('userId');
+    function close1() {
+        window.opener = null;
+        window.open("", "_self");
+        window.close();
+    }
+
+    var stompClient;
+
+    // 建立连接对象（还未发起连接）
+    function connect() {
+        if (userId == null) {
+            window.location.href = "login.html";
+        }
+        var socket = new SockJS(baseUrl + "/stomp");
+// 获取 STOMP 子协议的客户端对象
+        stompClient = Stomp.over(socket);
+// 向服务器发起websocket连接并发送CONNECT帧
+        stompClient.connect(
+            {
+                userId: userId,
+                password: 'admin'
+            },
+            function connectCallback(frame) {
+                stompClient.subscribe('/topic/getResponse', function (response) {
+                    // var obj = JSON.parse(response.body);
+                    // if (!(obj.data == null)) {
+                    //
+                    // }
+                });
+            },
+            function errorCallBack(error) {
+                // 连接失败时（服务器响应 ERROR 帧）的回调方法
+                alert("连接失败");
+            }
+        );
+    }
+
+    //发送消息
+    function send() {
+        var title = $("#title").val();
+        var content = $(".Editor-editor").html();
+        if (title === "") {
+            alert("标题不能为空");
+            return;
+        }
+        if (content === "") {
+            alert("内容不能为空");
+            return;
+        }
+        var messageJson = JSON.stringify({"content": content, "senderId": userId, "receiverId": -1, "title": title});
+        stompClient.send("/sendTopic", {}, messageJson);
+        alert("发送成功");
+    }
+
+    connect();
+</script>
+</body>
+</html>
